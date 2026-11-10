@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ExamPulse | Mini Online Examination Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand" id="brand-logo">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <path d="m9 15 2 2 4-4"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">ExamPulse</span>
+          <span class="brand-tag">Online Examination Portal</span>
+        </div>
+      </div>
+
+      <!-- User Nav Actions -->
+      <div class="user-nav-actions" id="user-nav-actions">
+        <!-- Rendered dynamically: Auth Buttons or User Profile -->
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Container -->
+  <main class="main-content" id="main-content">
+
+    <!-- VIEW 1: AUTHENTICATION (Login / Register) -->
+    <section id="view-auth" class="view-section hidden">
+      <div class="auth-card-wrapper">
+        <div class="auth-card">
+          <div class="auth-header">
+            <h2>Welcome to ExamPulse</h2>
+            <p>Access exams, manage tests, and review performance</p>
+          </div>
+
+          <div class="auth-tabs">
+            <button class="auth-tab-btn active" id="tab-btn-login">Sign In</button>
+            <button class="auth-tab-btn" id="tab-btn-register">Register as Candidate</button>
+          </div>
+
+          <!-- Login Form -->
+          <form id="form-login" class="auth-form">
+            <div class="form-group">
+              <label for="login-username">Username</label>
+              <input type="text" id="login-username" placeholder="e.g. admin, examiner, or student" required autocomplete="username" />
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+          </form>
+
+          <!-- Register Form (Public Registration strictly for Candidates / Students) -->
+          <form id="form-register" class="auth-form hidden">
+            <div class="form-group">
+              <label for="reg-fullname">Full Name</label>
+              <input type="text" id="reg-fullname" placeholder="e.g. Maya Patel" required />
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Email Address (Optional)</label>
+              <input type="email" id="reg-email" placeholder="e.g. maya@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="reg-username">Username</label>
+              <input type="text" id="reg-username" placeholder="Choose a username" required />
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password</label>
+              <input type="password" id="reg-password" placeholder="Create a strong password" required />
+            </div>
+            <div class="form-group">
+              <label>Account Role</label>
+              <div class="role-badge-display">
+                <span class="role-pill role-pill-student">Student / Candidate</span>
+                <span class="text-muted" style="font-size: 0.8rem; margin-left: 0.5rem;">(Examiners are added by Administrator)</span>
+              </div>
+              <input type="hidden" id="reg-role" value="student" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Create Candidate Account</button>
+          </form>
+
+          <div class="auth-demo-hint">
+            <p class="hint-title">Quick Demo Logins:</p>
+            <div class="demo-buttons-grid demo-buttons-grid-3">
+              <button type="button" class="btn-demo-box" id="btn-autofill-admin">
+                <strong>Admin</strong>
+                <span>admin / admin123</span>
+              </button>
+              <button type="button" class="btn-demo-box" id="btn-autofill-examiner">
+                <strong>Examiner</strong>
+                <span>examiner / examiner123</span>
+              </button>
+              <button type="button" class="btn-demo-box" id="btn-autofill-student">
+                <strong>Student</strong>
+                <span>student / student123</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: ADMIN & EXAMINER DASHBOARD -->
+    <section id="view-admin" class="view-section hidden">
+      <!-- Admin / Examiner Top Banner -->
+      <div class="dashboard-banner">
+        <div>
+          <span class="badge badge-purple" id="admin-badge-role">Admin Control Center</span>
+          <h1 id="admin-greeting">Welcome, Administrator</h1>
+          <p class="subtitle" id="admin-subtitle">Complete database management: view and edit exams, questions, candidate accounts, and attempt records.</p>
+        </div>
+        <div class="banner-actions">
+          <button class="btn btn-primary" id="btn-nav-create-exam">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Create New Exam
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Cards (Clickable shortcuts to each table) -->
+      <div class="stats-grid" id="admin-stats-grid">
+        <div class="stat-card" id="card-stat-exams" style="cursor: pointer;" title="Click to view Exams table">
+          <div class="stat-icon icon-blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-total-exams">0</div>
+            <div class="stat-label">Exams Table (exams)</div>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-stat-questions" style="cursor: pointer;" title="Click to view Questions Bank table">
+          <div class="stat-icon icon-purple">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-total-questions">0</div>
+            <div class="stat-label">Questions Table (questions)</div>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-stat-users" style="cursor: pointer;" title="Click to view User Accounts table">
+          <div class="stat-icon icon-teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-total-students">0</div>
+            <div class="stat-label">User Accounts (users)</div>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-stat-submissions" style="cursor: pointer;" title="Click to view Attempts & Submissions table">
+          <div class="stat-icon icon-green">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-pass-rate">0%</div>
+            <div class="stat-label">Attempts (submissions)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tables Navigation Tabs -->
+      <div class="sub-tabs-container">
+        <button class="sub-tab-btn active" id="admin-tab-exams">
+          <span>📋 Exams (exams)</span>
+          <span class="count-pill" id="badge-exam-count">0</span>
+        </button>
+        <button class="sub-tab-btn" id="admin-tab-questions">
+          <span>❓ Questions Bank (questions)</span>
+          <span class="count-pill" id="badge-question-count">0</span>
+        </button>
+        <button class="sub-tab-btn" id="admin-tab-users">
+          <span>👥 User Accounts (users)</span>
+          <span class="count-pill" id="badge-users-count">0</span>
+        </button>
+        <button class="sub-tab-btn" id="admin-tab-submissions">
+          <span>📊 Attempts (submissions)</span>
+          <span class="count-pill" id="badge-sub-count">0</span>
+        </button>
+        <button class="sub-tab-btn" id="admin-tab-answers">
+          <span>🔍 Responses (submission_answers)</span>
+          <span class="count-pill" id="badge-answers-count">0</span>
+        </button>
+        <button class="sub-tab-btn" id="admin-tab-create">
+          <span>➕ Add Exam</span>
+        </button>
+      </div>
+
+      <!-- Admin Tab Content 1: Manage Exams Table -->
+      <div id="admin-section-exams" class="admin-tab-content">
+        <div class="card-table-wrapper">
+          <div class="section-toolbar">
+            <h3>Examinations Table (<code style="color:var(--primary); font-family:var(--font-mono);">exams</code> table)</h3>
+            <span class="text-muted">Total active tests stored in SQLite database</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Exam Title</th>
+                  <th>Subject</th>
+                  <th>Duration</th>
+                  <th>Questions</th>
+                  <th>Pass Criteria</th>
+                  <th>Attempts</th>
+                  <th class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-exams-table-body">
+                <!-- Dynamically Populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 2: Questions Bank Table -->
+      <div id="admin-section-questions" class="admin-tab-content hidden">
+        <div class="card-table-wrapper">
+          <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3>MCQ Questions Table (<code style="color:var(--primary); font-family:var(--font-mono);">questions</code> table)</h3>
+              <span class="text-muted" id="questions-table-subtitle">All questions stored in SQLite database</span>
+            </div>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-primary btn-sm" id="btn-toolbar-add-question">+ Add Question</button>
+              <label for="filter-exam-select" style="font-size: 0.85rem; font-weight: 600;">Filter by Exam:</label>
+              <select id="filter-exam-select" style="padding: 0.4rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border); font-size: 0.85rem; background: var(--bg-card); color: var(--text-main);">
+                <option value="">All Examinations</option>
+              </select>
+              <button class="btn btn-outline btn-sm" id="btn-refresh-questions">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Exam Title</th>
+                  <th>Question Statement</th>
+                  <th>Options</th>
+                  <th>Correct</th>
+                  <th>Marks</th>
+                  <th>Explanation</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-questions-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 3: User Accounts Table -->
+      <div id="admin-section-users" class="admin-tab-content hidden">
+        <div class="card-table-wrapper">
+          <div class="section-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3>Registered User Accounts (<code style="color:var(--primary); font-family:var(--font-mono);">users</code> table)</h3>
+              <span class="text-muted">Admin control: create examiners, manage candidate accounts, and review database records</span>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-open-add-user-modal">
+              + Add Examiner / User
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>User Profile</th>
+                  <th>Role</th>
+                  <th>Email</th>
+                  <th>Joined Date</th>
+                  <th>Attempts</th>
+                  <th>Passed / Failed</th>
+                  <th>Avg Score</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 4: Student Submissions / Attempts Table -->
+      <div id="admin-section-submissions" class="admin-tab-content hidden">
+        <div class="card-table-wrapper">
+          <div class="section-toolbar">
+            <h3>Student Exam Submissions & Attempts (<code style="color:var(--primary); font-family:var(--font-mono);">submissions</code> table)</h3>
+            <span class="text-muted">Live records of completed assessments with scores and timing</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Exam Title</th>
+                  <th>Attempt</th>
+                  <th>Time Taken</th>
+                  <th>Score</th>
+                  <th>Percentage</th>
+                  <th>Status</th>
+                  <th>Submitted At</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-submissions-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 5: Granular Responses Table -->
+      <div id="admin-section-answers" class="admin-tab-content hidden">
+        <div class="card-table-wrapper">
+          <div class="section-toolbar">
+            <h3>Detailed Candidate Responses (<code style="color:var(--primary); font-family:var(--font-mono);">submission_answers</code> table)</h3>
+            <span class="text-muted">Per-question answer records stored in SQLite database</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Record ID</th>
+                  <th>Candidate</th>
+                  <th>Exam</th>
+                  <th>Question Statement</th>
+                  <th>Selected</th>
+                  <th>Correct</th>
+                  <th>Result</th>
+                  <th>Marks</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="admin-answers-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab Content 6: Create Exam Form -->
+      <div id="admin-section-create" class="admin-tab-content hidden">
+        <div class="create-exam-card">
+          <div class="form-header-row">
+            <div>
+              <h3>Add New Online Examination</h3>
+              <p class="text-muted">Configure exam settings and add MCQ questions with single correct choice.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-prefill-sample-questions">
+              ✨ Pre-fill Sample 3 Questions
+            </button>
+          </div>
+
+          <form id="form-create-exam">
+            <div class="form-grid-3">
+              <div class="form-group col-span-2">
+                <label for="exam-title">Exam Title <span class="required">*</span></label>
+                <input type="text" id="exam-title" placeholder="e.g. Data Structures & Algorithms Quiz" required />
+              </div>
+              <div class="form-group">
+                <label for="exam-subject">Subject / Category <span class="required">*</span></label>
+                <input type="text" id="exam-subject" placeholder="e.g. Computer Science" required />
+              </div>
+            </div>
+
+            <div class="form-grid-3">
+              <div class="form-group col-span-2">
+                <label for="exam-description">Description & Guidelines</label>
+                <input type="text" id="exam-description" placeholder="Short description of concepts covered in this exam" />
+              </div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="exam-duration">Duration (Mins) <span class="required">*</span></label>
+                  <input type="number" id="exam-duration" value="15" min="1" max="180" required />
+                </div>
+                <div class="form-group">
+                  <label for="exam-passmark">Pass Mark (%) <span class="required">*</span></label>
+                  <input type="number" id="exam-passmark" value="50" min="1" max="100" required />
+                </div>
+              </div>
+            </div>
+
+            <!-- Questions Builder Header -->
+            <div class="questions-builder-header">
+              <div>
+                <h4>Exam Questions (MCQ)</h4>
+                <p class="text-muted">Each question has 4 options. Mark the radio button of the correct option.</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-question-block">
+                + Add Another Question
+              </button>
+            </div>
+
+            <!-- Container for Question Cards -->
+            <div id="questions-builder-list" class="questions-builder-list">
+              <!-- Question cards will be added here -->
+            </div>
+
+            <div class="form-footer-actions">
+              <button type="button" class="btn btn-outline" id="btn-cancel-create-exam">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-lg">Publish Examination</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: USER / STUDENT DASHBOARD -->
+    <section id="view-student" class="view-section hidden">
+      <!-- Student Banner -->
+      <div class="dashboard-banner student-banner">
+        <div>
+          <span class="badge badge-teal">Candidate Dashboard</span>
+          <h1 id="student-greeting">Welcome, Student</h1>
+          <p class="subtitle">Select an examination to begin, or review your past attempts and scores.</p>
+        </div>
+        <div class="banner-actions">
+          <button class="btn btn-outline" id="btn-student-view-history">
+            View My Scores
+          </button>
+        </div>
+      </div>
+
+      <!-- Student Navigation Tabs -->
+      <div class="sub-tabs-container">
+        <button class="sub-tab-btn active" id="student-tab-available">
+          <span>Available Examinations</span>
+          <span class="count-pill" id="badge-student-exams">0</span>
+        </button>
+        <button class="sub-tab-btn" id="student-tab-history">
+          <span>My Results & History</span>
+          <span class="count-pill" id="badge-student-results">0</span>
+        </button>
+      </div>
+
+      <!-- Student Tab 1: Available Exams Grid -->
+      <div id="student-section-available" class="student-tab-content">
+        <div class="exams-grid" id="student-exams-grid">
+          <!-- Dynamically populated exam cards -->
+        </div>
+      </div>
+
+      <!-- Student Tab 2: Results & History -->
+      <div id="student-section-history" class="student-tab-content hidden">
+        <!-- Candidate Personal Stats Cards -->
+        <div class="stats-grid" id="student-stats-grid" style="margin-bottom: 1.5rem;">
+          <div class="stat-card">
+            <div class="stat-icon icon-blue">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            </div>
+            <div>
+              <div class="stat-value" id="student-stat-attempts">0</div>
+              <div class="stat-label">Total Attempts</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div>
+              <div class="stat-value" id="student-stat-passed">0</div>
+              <div class="stat-label">Exams Passed</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <div>
+              <div class="stat-value" id="student-stat-avg">0%</div>
+              <div class="stat-label">Average Score</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon icon-teal">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            </div>
+            <div>
+              <div class="stat-value" id="student-stat-best">0%</div>
+              <div class="stat-label">Best Percentage</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-table-wrapper">
+          <div class="section-toolbar">
+            <h3>My Exam Attempts & Score History</h3>
+            <span class="text-muted">Track your performance and review answers stored in database</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Exam Title</th>
+                  <th>Subject</th>
+                  <th>Attempt</th>
+                  <th>Time Taken</th>
+                  <th>Score</th>
+                  <th>Percentage</th>
+                  <th>Result</th>
+                  <th>Date Taken</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="student-history-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: LIVE EXAM SESSION (Assessment Mode) -->
+    <section id="view-exam-session" class="view-section hidden">
+      <div class="exam-arena-container">
+        <!-- Live Exam Header -->
+        <div class="exam-arena-header">
+          <div class="exam-header-left">
+            <span class="badge badge-purple" id="arena-subject-badge">Computer Science</span>
+            <h2 id="arena-exam-title">Web Development Essentials</h2>
+          </div>
+
+          <!-- Countdown Timer -->
+          <div class="exam-timer-box" id="exam-timer-box">
+            <div class="timer-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="timer-display">
+              <span class="timer-label">Time Remaining</span>
+              <span class="timer-digits" id="exam-countdown">00:00</span>
+            </div>
+          </div>
+
+          <div class="exam-header-right">
+            <button class="btn btn-success btn-finish-exam" id="btn-trigger-submit-modal">
+              Submit Exam
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="exam-progress-bar-wrap">
+          <div class="exam-progress-bar-fill" id="exam-progress-fill" style="width: 0%"></div>
+        </div>
+
+        <!-- Exam Workspace: Question Palette & Active Question -->
+        <div class="exam-arena-body">
+          <!-- Question Palette Sidebar -->
+          <aside class="exam-palette-sidebar">
+            <div class="palette-header">
+              <h4>Questions</h4>
+              <span id="answered-counter-label" class="palette-counter">0 / 0 Answered</span>
+            </div>
+            <div class="palette-grid" id="palette-grid">
+              <!-- Question buttons (1, 2, 3...) -->
+            </div>
+            <div class="palette-legend">
+              <div class="legend-item"><span class="legend-dot dot-answered"></span> Answered</div>
+              <div class="legend-item"><span class="legend-dot dot-current"></span> Current</div>
+              <div class="legend-item"><span class="legend-dot dot-unanswered"></span> Unanswered</div>
+            </div>
+          </aside>
+
+          <!-- Question Content Area -->
+          <div class="exam-question-area">
+            <div class="question-container-card">
+              <div class="question-meta-row">
+                <span class="question-number-pill" id="current-q-pill">Question 1 of 5</span>
+                <span class="question-marks-pill" id="current-q-marks">1 Mark</span>
+              </div>
+
+              <div class="question-statement" id="current-q-text">
+                Loading question...
+              </div>
+
+              <!-- Options A, B, C, D -->
+              <div class="options-container" id="current-q-options">
+                <!-- Option cards rendered dynamically -->
+              </div>
+
+              <!-- Question Controls Footer -->
+              <div class="question-controls-footer">
+                <button type="button" class="btn btn-outline btn-sm" id="btn-clear-selection">
+                  Clear Selection
+                </button>
+                <div class="nav-btn-group">
+                  <button type="button" class="btn btn-secondary" id="btn-prev-question">
+                    ← Previous
+                  </button>
+                  <button type="button" class="btn btn-primary" id="btn-next-question">
+                    Next Question →
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: SUBMISSION CONFIRMATION -->
+  <div id="modal-submit-confirm" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Ready to submit your exam?</h3>
+        <button class="modal-close-btn" id="btn-close-submit-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="submit-summary-box">
+          <div class="summary-metric">
+            <span class="metric-num" id="modal-answered-count">0</span>
+            <span class="metric-text">Answered</span>
+          </div>
+          <div class="summary-metric text-warning">
+            <span class="metric-num" id="modal-unanswered-count">0</span>
+            <span class="metric-text">Unanswered</span>
+          </div>
+          <div class="summary-metric">
+            <span class="metric-num" id="modal-total-count">0</span>
+            <span class="metric-text">Total</span>
+          </div>
+        </div>
+        <p class="modal-warning-text">Once submitted, your answers will be securely evaluated and stored in the database.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-cancel-submit">Return to Exam</button>
+        <button class="btn btn-success" id="btn-confirm-final-submit">Yes, Submit Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RESULT & DETAILED QUESTION REVIEW -->
+  <div id="modal-result-review" class="modal-backdrop hidden">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-header">
+        <div>
+          <h3 id="review-exam-title">Exam Performance Report</h3>
+          <p class="text-muted" id="review-exam-meta">Comprehensive breakdown and answer rationale</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-review-modal">&times;</button>
+      </div>
+      <div class="modal-body review-modal-body">
+        <!-- Scorecard Header -->
+        <div class="scorecard-hero" id="scorecard-hero">
+          <div class="score-circle" id="review-score-circle">
+            <span class="score-percent" id="review-percent">0%</span>
+            <span class="score-fraction" id="review-score-fraction">0 / 0</span>
+          </div>
+          <div class="score-summary-details">
+            <div class="status-pill-lg" id="review-status-pill">PASSED</div>
+            <div class="breakdown-pills">
+              <div class="pill-stat stat-correct">
+                <span class="dot"></span>
+                <span>Correct: <strong id="review-correct-count">0</strong></span>
+              </div>
+              <div class="pill-stat stat-wrong">
+                <span class="dot"></span>
+                <span>Wrong: <strong id="review-wrong-count">0</strong></span>
+              </div>
+              <div class="pill-stat stat-unanswered">
+                <span class="dot"></span>
+                <span>Unanswered: <strong id="review-unanswered-count">0</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Question By Question Review -->
+        <h4 class="review-section-title">Question-by-Question Solution Review</h4>
+        <div class="review-questions-list" id="review-questions-list">
+          <!-- Dynamically populated review items -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btn-dismiss-review">Close & Return to Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD QUESTION TO EXAM -->
+  <div id="modal-add-single-question" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h3>Add Question to Examination</h3>
+          <p class="text-muted" id="add-q-subtitle">Add a new MCQ question with 4 options</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-add-q-modal">&times;</button>
+      </div>
+      <form id="form-add-single-question">
+        <input type="hidden" id="single-q-exam-id" />
+        <div class="modal-body">
+          <div class="form-group" id="sq-exam-select-group">
+            <label for="sq-exam-select">Target Examination <span class="required">*</span></label>
+            <select id="sq-exam-select" required>
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sq-text">Question Statement <span class="required">*</span></label>
+            <textarea id="sq-text" rows="2" placeholder="Enter question..." required></textarea>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="sq-opt-a">Option A <span class="required">*</span></label>
+              <input type="text" id="sq-opt-a" required />
+            </div>
+            <div class="form-group">
+              <label for="sq-opt-b">Option B <span class="required">*</span></label>
+              <input type="text" id="sq-opt-b" required />
+            </div>
+            <div class="form-group">
+              <label for="sq-opt-c">Option C <span class="required">*</span></label>
+              <input type="text" id="sq-opt-c" required />
+            </div>
+            <div class="form-group">
+              <label for="sq-opt-d">Option D <span class="required">*</span></label>
+              <input type="text" id="sq-opt-d" required />
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="sq-correct">Correct Option <span class="required">*</span></label>
+              <select id="sq-correct" required>
+                <option value="A">Option A</option>
+                <option value="B">Option B</option>
+                <option value="C">Option C</option>
+                <option value="D">Option D</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sq-marks">Marks</label>
+              <input type="number" id="sq-marks" value="1" min="1" max="10" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="sq-explanation">Explanation / Solution Rationale</label>
+            <input type="text" id="sq-explanation" placeholder="Explanation revealed during exam review" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btn-cancel-single-q">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Question</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT QUESTION -->
+  <div id="modal-edit-question" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h3 id="edit-q-modal-title">Edit Question</h3>
+          <p class="text-muted" id="edit-q-exam-title">Update question statement and options</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-edit-q-modal">&times;</button>
+      </div>
+      <form id="form-edit-question">
+        <input type="hidden" id="eq-id" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="eq-text">Question Statement <span class="required">*</span></label>
+            <textarea id="eq-text" rows="2" placeholder="Enter question..." required></textarea>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="eq-opt-a">Option A <span class="required">*</span></label>
+              <input type="text" id="eq-opt-a" required />
+            </div>
+            <div class="form-group">
+              <label for="eq-opt-b">Option B <span class="required">*</span></label>
+              <input type="text" id="eq-opt-b" required />
+            </div>
+            <div class="form-group">
+              <label for="eq-opt-c">Option C <span class="required">*</span></label>
+              <input type="text" id="eq-opt-c" required />
+            </div>
+            <div class="form-group">
+              <label for="eq-opt-d">Option D <span class="required">*</span></label>
+              <input type="text" id="eq-opt-d" required />
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="eq-correct">Correct Option <span class="required">*</span></label>
+              <select id="eq-correct" required>
+                <option value="A">Option A</option>
+                <option value="B">Option B</option>
+                <option value="C">Option C</option>
+                <option value="D">Option D</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="eq-marks">Marks</label>
+              <input type="number" id="eq-marks" value="1" min="1" max="10" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="eq-explanation">Explanation / Solution Rationale</label>
+            <input type="text" id="eq-explanation" placeholder="Explanation revealed during exam review" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btn-cancel-edit-q">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADMIN ADD USER / EXAMINER -->
+  <div id="modal-add-user" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h3>Create User / Examiner Account</h3>
+          <p class="text-muted">Administrator account creation</p>
+        </div>
+        <button class="modal-close-btn" id="btn-close-add-user-modal">&times;</button>
+      </div>
+      <form id="form-add-user">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-user-fullname">Full Name <span class="required">*</span></label>
+            <input type="text" id="new-user-fullname" placeholder="e.g. Dr. Robert Vance" required />
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="new-user-username">Username <span class="required">*</span></label>
+              <input type="text" id="new-user-username" placeholder="e.g. examiner_rvance" required />
+            </div>
+            <div class="form-group">
+              <label for="new-user-role">Role <span class="required">*</span></label>
+              <select id="new-user-role" required>
+                <option value="examiner" selected>Examiner (View submissions, add & edit questions)</option>
+                <option value="student">Student / Candidate</option>
+                <option value="admin">Administrator (Full control)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="new-user-password">Password <span class="required">*</span></label>
+              <input type="password" id="new-user-password" placeholder="Create password" required />
+            </div>
+            <div class="form-group">
+              <label for="new-user-email">Email (Optional)</label>
+              <input type="email" id="new-user-email" placeholder="e.g. examiner@example.com" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btn-cancel-add-user">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

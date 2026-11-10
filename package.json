@@ -1,0 +1,14 @@
+{
+  "name": "mini-examination-portal",
+  "version": "1.0.0",
+  "description": "Mini Online Examination Portal (MCQ) with Admin & User Dashboards, Backend & SQLite Database",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test_runner.js"
+  },
+  "keywords": ["examination-portal", "mcq", "sqlite", "nodejs"],
+  "author": "",
+  "license": "MIT"
+}
