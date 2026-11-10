@@ -1,14 +1,31 @@
 {
   "name": "mini-examination-portal",
   "version": "1.0.0",
-  "description": "Mini Online Examination Portal (MCQ) with Admin & User Dashboards, Backend & SQLite Database",
+  "description": "Mini Online Examination Portal (MCQ) with Admin & User Dashboards, Backend & Neon PostgreSQL Hosting for Vercel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test_runner.js"
+    "test": "node test_runner.js",
+    "db:setup": "node scripts/setup_neon.js",
+    "db:migrate": "node scripts/migrate_sqlite_to_neon.js"
   },
-  "keywords": ["examination-portal", "mcq", "sqlite", "nodejs"],
+  "keywords": [
+    "examination-portal",
+    "mcq",
+    "neon",
+    "postgresql",
+    "vercel",
+    "nodejs"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "dotenv": "^18.0.10",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.14"
+  }
 }

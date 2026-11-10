@@ -1,5 +1,5 @@
 const { EventEmitter } = require('node:events');
-const { server } = require('./server.js');
+const { server, ensureDbReady } = require('./server.js');
 
 // Mock HTTP Request/Response to test server without opening network sockets
 function dispatch(options, payload = null) {
@@ -43,16 +43,19 @@ function dispatch(options, payload = null) {
     // Trigger request on server
     server.emit('request', req, res);
 
-    // Stream body
-    if (payload) {
-      const dataStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
-      req.emit('data', Buffer.from(dataStr));
-    }
-    req.emit('end');
+    // Stream body asynchronously to ensure handlers are attached
+    setImmediate(() => {
+      if (payload) {
+        const dataStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        req.emit('data', Buffer.from(dataStr));
+      }
+      req.emit('end');
+    });
   });
 }
 
 async function runMockTests() {
+  await ensureDbReady();
   console.log('Testing ExamPulse backend (In-Memory HTTP Dispatch)...');
 
   // 1. Static HTML check
@@ -186,9 +189,10 @@ async function runMockTests() {
   });
   console.log('12. Candidate Attempt Metrics test:', profileStatsRes.data.stats?.total_attempts > 0 ? '✓ PASS (Total user attempts recorded: ' + profileStatsRes.data.stats.total_attempts + ')' : '✗ FAIL');
 
-  // 13. Verify Attempt Number and Granular Answers in SQLite
+  // 13. Verify Attempt Number and Granular Answers in Database
   const { db } = require('./db.js');
-  const answerRows = db.prepare('SELECT COUNT(*) as c FROM submission_answers').get().c;
+  const answerRow = await db.prepare('SELECT COUNT(*) as c FROM submission_answers').get();
+  const answerRows = answerRow ? Number(answerRow.c) : 0;
   console.log('13. Relational Attempt Answers in Database:', answerRows > 0 ? `✓ PASS (${answerRows} granular answer rows saved)` : '✗ FAIL');
 
   // 14. Admin Questions Table API

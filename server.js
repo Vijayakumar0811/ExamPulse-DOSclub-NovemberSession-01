@@ -2,10 +2,15 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { db, initDatabase, hashPassword, verifyPassword } = require('./db.js');
+const { db, initDatabase, ensureDbReady, hashPassword, verifyPassword } = require('./db.js');
 
-// Initialize database schema and seeds
-initDatabase();
+// Pre-warm database initialization
+let isDbReady = false;
+ensureDbReady().then(() => {
+  isDbReady = true;
+}).catch(err => {
+  console.error('[Database] Initialization error:', err.message);
+});
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -61,9 +66,8 @@ function parseBody(req) {
   });
 }
 
-// Authentication & Session Helper
-function getAuthenticatedUser(req) {
-  // Check Authorization header or Cookie
+// Authentication & Session Helper (Async for Neon PostgreSQL / SQLite)
+async function getAuthenticatedUser(req) {
   let token = null;
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -82,7 +86,7 @@ function getAuthenticatedUser(req) {
   if (!token) return null;
 
   const now = Date.now();
-  const session = db.prepare(`
+  const session = await db.prepare(`
     SELECT s.token, s.expires_at, u.id, u.username, u.full_name, u.role
     FROM sessions s
     JOIN users u ON s.user_id = u.id
@@ -93,16 +97,16 @@ function getAuthenticatedUser(req) {
 
   // Sliding inactivity timeout: every authenticated request extends the session.
   const expiresAt = now + 15 * 60 * 1000;
-  db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(expiresAt, token);
+  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(expiresAt, token);
 
   return session;
 }
 
-// Create new session token for user
-function createSession(userId) {
+// Create new session token for user (Async for Neon PostgreSQL / SQLite)
+async function createSession(userId) {
   const token = crypto.randomUUID();
   const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes of inactivity
-  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
+  await db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
   return token;
 }
 
@@ -120,7 +124,6 @@ function serveStaticFile(req, res, filePath) {
 
   fs.stat(fullPath, (err, stats) => {
     if (err || !stats.isFile()) {
-      // If file not found, try fallback or 404
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('404 Not Found');
       return;
@@ -140,8 +143,8 @@ function serveStaticFile(req, res, filePath) {
   });
 }
 
-// HTTP Server
-const server = http.createServer(async (req, res) => {
+// Main Request Handler (Works for Node http server and Vercel Serverless Functions)
+async function handler(req, res) {
   // Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -151,6 +154,12 @@ const server = http.createServer(async (req, res) => {
     });
     res.end();
     return;
+  }
+
+  // Ensure DB schema & seed are ready before processing requests
+  if (!isDbReady) {
+    await ensureDbReady();
+    isDbReady = true;
   }
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -169,12 +178,12 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { success: false, message: 'Username and password are required' });
       }
 
-      const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim().toLowerCase());
+      const user = await db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim().toLowerCase());
       if (!user || !verifyPassword(password, user.password_hash)) {
         return sendJson(res, 401, { success: false, message: 'Invalid username or password' });
       }
 
-      const token = createSession(user.id);
+      const token = await createSession(user.id);
       return sendJson(res, 200, {
         success: true,
         token,
@@ -192,19 +201,19 @@ const server = http.createServer(async (req, res) => {
       // Public self-registration is strictly restricted to student / candidate role
       const cleanRole = 'student';
 
-      const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
+      const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
       if (existing) {
         return sendJson(res, 400, { success: false, message: 'Username is already taken' });
       }
 
       const hash = hashPassword(password);
-      const result = db.prepare(`
+      const result = await db.prepare(`
         INSERT INTO users (username, password_hash, full_name, role, email)
         VALUES (?, ?, ?, ?, ?)
       `).run(cleanUsername, hash, full_name.trim(), cleanRole, email ? email.trim() : null);
 
       const userId = result.lastInsertRowid;
-      const token = createSession(userId);
+      const token = await createSession(userId);
 
       return sendJson(res, 201, {
         success: true,
@@ -216,13 +225,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/auth/demo-login' && method === 'POST') {
       const { role } = await parseBody(req);
       const targetRole = ['admin', 'examiner', 'student'].includes(role) ? role : 'student';
-      const user = db.prepare('SELECT * FROM users WHERE role = ? ORDER BY id ASC LIMIT 1').get(targetRole);
+      const user = await db.prepare('SELECT * FROM users WHERE role = ? ORDER BY id ASC LIMIT 1').get(targetRole);
 
       if (!user) {
         return sendJson(res, 404, { success: false, message: 'No demo user found for this role' });
       }
 
-      const token = createSession(user.id);
+      const token = await createSession(user.id);
       return sendJson(res, 200, {
         success: true,
         token,
@@ -231,7 +240,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/auth/me' && method === 'GET') {
-      const user = getAuthenticatedUser(req);
+      const user = await getAuthenticatedUser(req);
       if (!user) {
         return sendJson(res, 401, { success: false, message: 'Not authenticated' });
       }
@@ -248,13 +257,13 @@ const server = http.createServer(async (req, res) => {
         token = authHeader.substring(7).trim();
       }
       if (token) {
-        db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+        await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
       }
       return sendJson(res, 200, { success: true, message: 'Logged out successfully' });
     }
 
     // --- PROTECTED APIS (Requires login) ---
-    const user = getAuthenticatedUser(req);
+    const user = await getAuthenticatedUser(req);
 
     // --- ADMIN & EXAMINER ENDPOINTS ---
     if (pathname.startsWith('/api/admin/')) {
@@ -264,12 +273,23 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/admin/stats
       if (pathname === '/api/admin/stats' && method === 'GET') {
-        const totalExams = db.prepare('SELECT COUNT(*) as c FROM exams').get().c;
-        const totalQuestions = db.prepare('SELECT COUNT(*) as c FROM questions').get().c;
-        const totalStudents = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get().c;
-        const totalSubmissions = db.prepare('SELECT COUNT(*) as c FROM submissions').get().c;
-        const passedSubmissions = db.prepare("SELECT COUNT(*) as c FROM submissions WHERE status = 'PASSED'").get().c;
-        const avgScore = db.prepare('SELECT AVG(percentage) as avg FROM submissions').get().avg || 0;
+        const totalExamsRow = await db.prepare('SELECT COUNT(*) as c FROM exams').get();
+        const totalExams = totalExamsRow ? Number(totalExamsRow.c) : 0;
+
+        const totalQuestionsRow = await db.prepare('SELECT COUNT(*) as c FROM questions').get();
+        const totalQuestions = totalQuestionsRow ? Number(totalQuestionsRow.c) : 0;
+
+        const totalStudentsRow = await db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get();
+        const totalStudents = totalStudentsRow ? Number(totalStudentsRow.c) : 0;
+
+        const totalSubmissionsRow = await db.prepare('SELECT COUNT(*) as c FROM submissions').get();
+        const totalSubmissions = totalSubmissionsRow ? Number(totalSubmissionsRow.c) : 0;
+
+        const passedSubmissionsRow = await db.prepare("SELECT COUNT(*) as c FROM submissions WHERE status = 'PASSED'").get();
+        const passedSubmissions = passedSubmissionsRow ? Number(passedSubmissionsRow.c) : 0;
+
+        const avgScoreRow = await db.prepare('SELECT AVG(percentage) as avg FROM submissions').get();
+        const avgScore = avgScoreRow && avgScoreRow.avg !== null ? Number(avgScoreRow.avg) : 0;
 
         const passRate = totalSubmissions > 0 ? Math.round((passedSubmissions / totalSubmissions) * 100) : 0;
 
@@ -288,7 +308,7 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/admin/exams
       if (pathname === '/api/admin/exams' && method === 'GET') {
-        const exams = db.prepare(`
+        const exams = await db.prepare(`
           SELECT e.*,
                  u.full_name as creator_name,
                  (SELECT COUNT(*) FROM questions q WHERE q.exam_id = e.id) as question_count,
@@ -313,7 +333,7 @@ const server = http.createServer(async (req, res) => {
         const duration = parseInt(duration_minutes, 10) || 15;
         const passMarks = parseInt(pass_percentage, 10) || 50;
 
-        const examResult = db.prepare(`
+        const examResult = await db.prepare(`
           INSERT INTO exams (title, description, subject, duration_minutes, pass_percentage, created_by)
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(title.trim(), (description || '').trim(), subject.trim(), duration, passMarks, user.id);
@@ -331,7 +351,7 @@ const server = http.createServer(async (req, res) => {
             if (q.question_text && q.option_a && q.option_b && q.option_c && q.option_d) {
               const correct = ['A', 'B', 'C', 'D'].includes(q.correct_option) ? q.correct_option : 'A';
               const marks = parseInt(q.marks, 10) || 1;
-              insertQ.run(
+              await insertQ.run(
                 examId,
                 q.question_text.trim(),
                 q.option_a.trim(),
@@ -359,10 +379,10 @@ const server = http.createServer(async (req, res) => {
         const examId = parseInt(examDetailMatch[1], 10);
 
         if (method === 'GET') {
-          const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(examId);
+          const exam = await db.prepare('SELECT * FROM exams WHERE id = ?').get(examId);
           if (!exam) return sendJson(res, 404, { success: false, message: 'Exam not found' });
 
-          const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(examId);
+          const questions = await db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(examId);
           return sendJson(res, 200, { success: true, exam, questions });
         }
 
@@ -370,7 +390,7 @@ const server = http.createServer(async (req, res) => {
           const body = await parseBody(req);
           const { title, description, subject, duration_minutes, pass_percentage } = body;
 
-          db.prepare(`
+          await db.prepare(`
             UPDATE exams
             SET title = COALESCE(?, title),
                 description = COALESCE(?, description),
@@ -378,7 +398,14 @@ const server = http.createServer(async (req, res) => {
                 duration_minutes = COALESCE(?, duration_minutes),
                 pass_percentage = COALESCE(?, pass_percentage)
             WHERE id = ?
-          `).run(title, description, subject, duration_minutes, pass_percentage, examId);
+          `).run(
+            title !== undefined ? title : null,
+            description !== undefined ? description : null,
+            subject !== undefined ? subject : null,
+            duration_minutes !== undefined ? parseInt(duration_minutes, 10) : null,
+            pass_percentage !== undefined ? parseInt(pass_percentage, 10) : null,
+            examId
+          );
 
           return sendJson(res, 200, { success: true, message: 'Exam updated successfully' });
         }
@@ -387,7 +414,7 @@ const server = http.createServer(async (req, res) => {
           if (user.role !== 'admin') {
             return sendJson(res, 403, { success: false, message: 'Only administrators can delete examinations' });
           }
-          db.prepare('DELETE FROM exams WHERE id = ?').run(examId);
+          await db.prepare('DELETE FROM exams WHERE id = ?').run(examId);
           return sendJson(res, 200, { success: true, message: 'Exam deleted successfully' });
         }
       }
@@ -405,7 +432,7 @@ const server = http.createServer(async (req, res) => {
         const correct = ['A', 'B', 'C', 'D'].includes(q.correct_option) ? q.correct_option : 'A';
         const marks = parseInt(q.marks, 10) || 1;
 
-        const result = db.prepare(`
+        const result = await db.prepare(`
           INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks, explanation)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(examId, q.question_text.trim(), q.option_a.trim(), q.option_b.trim(), q.option_c.trim(), q.option_d.trim(), correct, marks, (q.explanation || '').trim());
@@ -420,7 +447,7 @@ const server = http.createServer(async (req, res) => {
 
         // GET single question for editing
         if (method === 'GET') {
-          const question = db.prepare(`
+          const question = await db.prepare(`
             SELECT q.*, e.title as exam_title, e.subject as exam_subject
             FROM questions q
             JOIN exams e ON q.exam_id = e.id
@@ -434,10 +461,10 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 200, { success: true, question });
         }
 
-        // PUT update question details (Add, edit questions permission)
+        // PUT update question details
         if (method === 'PUT') {
           const q = await parseBody(req);
-          const existing = db.prepare('SELECT id FROM questions WHERE id = ?').get(questionId);
+          const existing = await db.prepare('SELECT id FROM questions WHERE id = ?').get(questionId);
           if (!existing) {
             return sendJson(res, 404, { success: false, message: 'Question not found' });
           }
@@ -449,7 +476,7 @@ const server = http.createServer(async (req, res) => {
           const correct = ['A', 'B', 'C', 'D'].includes(q.correct_option) ? q.correct_option : 'A';
           const marks = parseInt(q.marks, 10) || 1;
 
-          db.prepare(`
+          await db.prepare(`
             UPDATE questions
             SET question_text = ?,
                 option_a = ?,
@@ -477,7 +504,7 @@ const server = http.createServer(async (req, res) => {
 
         // DELETE question
         if (method === 'DELETE') {
-          db.prepare('DELETE FROM questions WHERE id = ?').run(questionId);
+          await db.prepare('DELETE FROM questions WHERE id = ?').run(questionId);
           return sendJson(res, 200, { success: true, message: 'Question deleted successfully' });
         }
       }
@@ -487,7 +514,7 @@ const server = http.createServer(async (req, res) => {
         const examIdFilter = parsedUrl.searchParams.get('exam_id');
         let questions;
         if (examIdFilter) {
-          questions = db.prepare(`
+          questions = await db.prepare(`
             SELECT q.*, e.title as exam_title, e.subject as exam_subject
             FROM questions q
             JOIN exams e ON q.exam_id = e.id
@@ -495,7 +522,7 @@ const server = http.createServer(async (req, res) => {
             ORDER BY q.id ASC
           `).all(parseInt(examIdFilter, 10));
         } else {
-          questions = db.prepare(`
+          questions = await db.prepare(`
             SELECT q.*, e.title as exam_title, e.subject as exam_subject
             FROM questions q
             JOIN exams e ON q.exam_id = e.id
@@ -508,7 +535,7 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/admin/answers (List granular answers from submission_answers table)
       if (pathname === '/api/admin/answers' && method === 'GET') {
-        const answersList = db.prepare(`
+        const answersList = await db.prepare(`
           SELECT sa.id, sa.submission_id, sa.question_id, sa.selected_option, sa.is_correct, sa.marks_awarded,
                  q.question_text, q.correct_option,
                  e.title as exam_title,
@@ -528,7 +555,7 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/admin/submissions (Examiner and Admin view all submissions)
       if (pathname === '/api/admin/submissions' && method === 'GET') {
-        const submissions = db.prepare(`
+        const submissions = await db.prepare(`
           SELECT s.*, e.title as exam_title, u.full_name as student_name, u.username as student_username
           FROM submissions s
           JOIN exams e ON s.exam_id = e.id
@@ -549,16 +576,16 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 403, { success: false, message: 'Only administrators can view user accounts' });
         }
 
-        const usersList = db.prepare(`
+        const usersList = await db.prepare(`
           SELECT u.id, u.username, u.full_name, u.email, u.role, u.created_at,
                  COUNT(s.id) as total_attempts,
                  COALESCE(SUM(CASE WHEN s.status = 'PASSED' THEN 1 ELSE 0 END), 0) as passed_attempts,
                  COALESCE(SUM(CASE WHEN s.status = 'FAILED' THEN 1 ELSE 0 END), 0) as failed_attempts,
-                 ROUND(COALESCE(AVG(s.percentage), 0), 1) as avg_percentage,
+                 ROUND(CAST(COALESCE(AVG(s.percentage), 0) AS NUMERIC), 1) as avg_percentage,
                  MAX(s.submitted_at) as last_attempt_at
           FROM users u
           LEFT JOIN submissions s ON u.id = s.user_id
-          GROUP BY u.id
+          GROUP BY u.id, u.username, u.full_name, u.email, u.role, u.created_at
           ORDER BY u.id DESC
         `).all();
 
@@ -580,13 +607,13 @@ const server = http.createServer(async (req, res) => {
         const allowedRoles = ['admin', 'examiner', 'student'];
         const cleanRole = allowedRoles.includes(role) ? role : 'examiner';
 
-        const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
+        const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(cleanUsername);
         if (existing) {
           return sendJson(res, 400, { success: false, message: 'Username is already taken' });
         }
 
         const hash = hashPassword(password);
-        const result = db.prepare(`
+        const result = await db.prepare(`
           INSERT INTO users (username, password_hash, full_name, role, email)
           VALUES (?, ?, ?, ?, ?)
         `).run(cleanUsername, hash, full_name.trim(), cleanRole, email ? email.trim() : null);
@@ -612,10 +639,10 @@ const server = http.createServer(async (req, res) => {
         }
 
         const targetUserId = parseInt(userAttemptsMatch[1], 10);
-        const targetUser = db.prepare('SELECT id, username, full_name, role, email, created_at FROM users WHERE id = ?').get(targetUserId);
+        const targetUser = await db.prepare('SELECT id, username, full_name, role, email, created_at FROM users WHERE id = ?').get(targetUserId);
         if (!targetUser) return sendJson(res, 404, { success: false, message: 'User not found' });
 
-        const attempts = db.prepare(`
+        const attempts = await db.prepare(`
           SELECT s.*, e.title as exam_title, e.subject
           FROM submissions s
           JOIN exams e ON s.exam_id = e.id
@@ -637,7 +664,7 @@ const server = http.createServer(async (req, res) => {
         if (targetUserId === user.id) {
           return sendJson(res, 400, { success: false, message: 'You cannot delete your own admin account' });
         }
-        db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+        await db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
         return sendJson(res, 200, { success: true, message: 'User account deleted successfully' });
       }
     }
@@ -650,7 +677,7 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/user/exams (List published exams with student's attempt status)
       if (pathname === '/api/user/exams' && method === 'GET') {
-        const exams = db.prepare(`
+        const exams = await db.prepare(`
           SELECT e.id, e.title, e.description, e.subject, e.duration_minutes, e.pass_percentage,
                  (SELECT COUNT(*) FROM questions q WHERE q.exam_id = e.id) as question_count,
                  (SELECT COUNT(*) FROM submissions s WHERE s.exam_id = e.id AND s.user_id = ?) as student_attempts,
@@ -667,14 +694,14 @@ const server = http.createServer(async (req, res) => {
       const startExamMatch = pathname.match(/^\/api\/user\/exams\/(\d+)\/start$/);
       if (startExamMatch && method === 'GET') {
         const examId = parseInt(startExamMatch[1], 10);
-        const exam = db.prepare('SELECT id, title, description, subject, duration_minutes, pass_percentage FROM exams WHERE id = ?').get(examId);
+        const exam = await db.prepare('SELECT id, title, description, subject, duration_minutes, pass_percentage FROM exams WHERE id = ?').get(examId);
 
         if (!exam) {
           return sendJson(res, 404, { success: false, message: 'Exam not found' });
         }
 
         // Fetch questions without exposing correct_option or explanation
-        const questions = db.prepare(`
+        const questions = await db.prepare(`
           SELECT id, exam_id, question_text, option_a, option_b, option_c, option_d, marks
           FROM questions
           WHERE exam_id = ?
@@ -696,7 +723,7 @@ const server = http.createServer(async (req, res) => {
       const submitExamMatch = pathname.match(/^\/api\/user\/exams\/(\d+)\/submit$/);
       if (submitExamMatch && method === 'POST') {
         const examId = parseInt(submitExamMatch[1], 10);
-        const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(examId);
+        const exam = await db.prepare('SELECT * FROM exams WHERE id = ?').get(examId);
 
         if (!exam) {
           return sendJson(res, 404, { success: false, message: 'Exam not found' });
@@ -706,7 +733,7 @@ const server = http.createServer(async (req, res) => {
         const studentAnswers = body.answers || {}; // { [questionId]: "A" | "B" | "C" | "D" }
 
         // Fetch actual questions with correct answers
-        const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(examId);
+        const questions = await db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(examId);
 
         let correctCount = 0;
         let wrongCount = 0;
@@ -752,11 +779,11 @@ const server = http.createServer(async (req, res) => {
         const status = percentage >= exam.pass_percentage ? 'PASSED' : 'FAILED';
 
         // Calculate attempt number & time taken
-        const prevAttempts = db.prepare('SELECT COUNT(*) as count FROM submissions WHERE exam_id = ? AND user_id = ?').get(examId, user.id);
-        const attemptNumber = (prevAttempts ? prevAttempts.count : 0) + 1;
+        const prevAttempts = await db.prepare('SELECT COUNT(*) as count FROM submissions WHERE exam_id = ? AND user_id = ?').get(examId, user.id);
+        const attemptNumber = (prevAttempts ? Number(prevAttempts.count) : 0) + 1;
         const timeTakenSeconds = parseInt(body.time_taken_seconds, 10) || 0;
 
-        // Store submission in SQLite
+        // Store submission
         const insertSubmission = db.prepare(`
           INSERT INTO submissions (
             exam_id, user_id, attempt_number, time_taken_seconds, total_questions, answered_count,
@@ -764,7 +791,7 @@ const server = http.createServer(async (req, res) => {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
-        const subResult = insertSubmission.run(
+        const subResult = await insertSubmission.run(
           examId,
           user.id,
           attemptNumber,
@@ -789,7 +816,7 @@ const server = http.createServer(async (req, res) => {
         `);
 
         for (const r of reviewDetails) {
-          insertAnswer.run(
+          await insertAnswer.run(
             submissionId,
             r.questionId,
             r.userChoice || null,
@@ -822,12 +849,12 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/user/profile-stats (Candidate comprehensive metrics)
       if (pathname === '/api/user/profile-stats' && method === 'GET') {
-        const stats = db.prepare(`
+        const stats = await db.prepare(`
           SELECT
             COUNT(s.id) as total_attempts,
             COALESCE(SUM(CASE WHEN s.status = 'PASSED' THEN 1 ELSE 0 END), 0) as passed_attempts,
             COALESCE(SUM(CASE WHEN s.status = 'FAILED' THEN 1 ELSE 0 END), 0) as failed_attempts,
-            ROUND(COALESCE(AVG(s.percentage), 0), 1) as avg_percentage,
+            ROUND(CAST(COALESCE(AVG(s.percentage), 0) AS NUMERIC), 1) as avg_percentage,
             COALESCE(MAX(s.percentage), 0) as best_percentage
           FROM submissions s
           WHERE s.user_id = ?
@@ -838,7 +865,7 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/user/results (Get current student's exam history)
       if (pathname === '/api/user/results' && method === 'GET') {
-        const results = db.prepare(`
+        const results = await db.prepare(`
           SELECT s.*, e.title as exam_title, e.subject, e.pass_percentage
           FROM submissions s
           JOIN exams e ON s.exam_id = e.id
@@ -853,7 +880,7 @@ const server = http.createServer(async (req, res) => {
       const reviewResultMatch = pathname.match(/^\/api\/user\/results\/(\d+)$/);
       if (reviewResultMatch && method === 'GET') {
         const submissionId = parseInt(reviewResultMatch[1], 10);
-        const sub = db.prepare(`
+        const sub = await db.prepare(`
           SELECT s.*, e.title as exam_title, e.subject, e.pass_percentage
           FROM submissions s
           JOIN exams e ON s.exam_id = e.id
@@ -865,7 +892,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         const answers = JSON.parse(sub.answers_json || '{}');
-        const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(sub.exam_id);
+        const questions = await db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY id ASC').all(sub.exam_id);
 
         const reviewDetails = questions.map(q => {
           const userChoice = answers[q.id] || null;
@@ -914,9 +941,12 @@ const server = http.createServer(async (req, res) => {
     console.error('Server error:', error);
     sendJson(res, 500, { success: false, message: 'Internal server error: ' + error.message });
   }
-});
+}
 
-// Start Server if run directly
+// HTTP Server
+const server = http.createServer(handler);
+
+// Start Server if run directly via `node server.js`
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`=======================================================`);
@@ -931,4 +961,9 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, PORT };
+// Export handler and server for Vercel Serverless Functions and testing
+module.exports = handler;
+module.exports.handler = handler;
+module.exports.server = server;
+module.exports.PORT = PORT;
+module.exports.ensureDbReady = ensureDbReady;

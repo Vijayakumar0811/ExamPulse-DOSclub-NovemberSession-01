@@ -1,8 +1,8 @@
 # ExamPulse - Mini Online Examination Portal (MCQ)
 
-A lightweight, modern, full-stack Online Examination Portal featuring an **Admin Dashboard** (create & manage exams, build MCQ questions, monitor student performance) and a **User/Student Dashboard** (browse exams, take timed assessments, view live countdown timer, and review performance).
+A lightweight, modern, full-stack Online Examination Portal featuring an **Admin Dashboard** (create & manage exams, build MCQ questions, monitor student performance), **Examiner Portal** (manage questions, review submissions), and **User/Student Dashboard** (browse exams, take timed assessments with live countdown timer, and review performance).
 
-Built with **Node.js**, native **SQLite (`node:sqlite`)**, and modern responsive CSS/JavaScript with **zero external npm dependencies** required to run!
+Built with **Node.js**, **Neon PostgreSQL Hosting** (optimized for **Vercel** serverless deployment), with seamless local SQLite fallback for offline development.
 
 ---
 
@@ -49,7 +49,7 @@ Built with **Node.js**, native **SQLite (`node:sqlite`)**, and modern responsive
   - **Submission Confirmation Dialog**: Summarizes answered vs unanswered questions before final submission.
 - **Anti-Cheating Security**:
   - Candidate exam sessions only receive question text and options—**correct options and explanations are never sent to the browser during the test**.
-  - All grading and score computations occur strictly on the backend against SQLite.
+  - All grading and score computations occur strictly on the backend.
 - **Instant Scorecard & Detailed Review**:
   - Instant score calculation (% and marks scored out of total).
   - Breakdown of Correct, Wrong, and Unanswered questions.
@@ -58,7 +58,7 @@ Built with **Node.js**, native **SQLite (`node:sqlite`)**, and modern responsive
 
 ---
 
-### 🔑 Default Credentials
+### 🔑 Default Demo Credentials
 
 | Role | Username | Password | Access / Purpose |
 | :--- | :--- | :--- | :--- |
@@ -71,99 +71,106 @@ Built with **Node.js**, native **SQLite (`node:sqlite`)**, and modern responsive
 
 ---
 
-## 🗄️ Database Architecture & Storage (SQLite)
+## 🐘 Neon PostgreSQL & Vercel Hosting
 
-**SQLite is 100% capable of handling all application data permanently.** It operates as a full ACID-compliant relational SQL engine stored directly in `exam_portal.db` without requiring any cloud services (like Firebase), external servers, or network configuration.
+This project is fully converted to **Neon – PostgreSQL hosting** using `@neondatabase/serverless` connection pooling, making it 100% cloud-ready for **Vercel** serverless hosting.
 
-### Relational Tables in `exam_portal.db`:
+### 1. Create a Free Neon PostgreSQL Database
+1. Go to [https://neon.tech](https://neon.tech) and sign up (free tier available).
+2. Click **Create Project** (e.g. name it `exampulse-db`).
+3. Under your project **Dashboard**, locate the **Connection Details** box.
+4. Copy the connection string. It will look like:
+   ```
+   postgresql://neondb_owner:npg_xxxxxx@ep-cool-fog-123456.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
 
-1. **`users` Table (User Accounts)**
-   - `id`: Auto-incrementing primary key.
-   - `username`: Unique username for authentication.
-   - `password_hash`: Salted `scrypt` cryptographic hash.
-   - `full_name`: Candidate or examiner's display name.
-   - `email`: Optional email address.
-   - `role`: Role constraint (`admin`, `examiner`, or `student`).
-   - `created_at`: Account registration timestamp.
+### 2. Local Setup with Neon
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Open `.env` and paste your Neon connection string into `DATABASE_URL`:
+   ```env
+   DATABASE_URL=postgresql://neondb_owner:your_password@ep-xxxxxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+3. Initialize and seed your Neon database with default users and exams:
+   ```bash
+   npm run db:setup
+   ```
+4. *(Optional)* If you already have existing local SQLite data in `exam_portal.db` that you want to transfer to Neon:
+   ```bash
+   npm run db:migrate
+   ```
 
-2. **`sessions` Table (Active Sessions)**
-   - `token`: Unique UUID Bearer session token.
-   - `user_id`: Foreign key reference to `users(id)`.
-   - `expires_at`: Millisecond expiration timestamp.
+*(Note: If `DATABASE_URL` is omitted, the project automatically falls back to local SQLite so offline testing and development always work seamlessly).*
 
-3. **`exams` Table (Examinations)**
-   - `id`: Primary key.
-   - `title`, `description`, `subject`: Exam metadata.
-   - `duration_minutes`: Timer duration.
-   - `pass_percentage`: Passing grade criteria.
-   - `created_by`: Foreign key reference to examiner `users(id)`.
-   - `created_at`: Creation date.
+---
 
-4. **`questions` Table (MCQ Bank)**
-   - `id`: Primary key.
-   - `exam_id`: Foreign key reference to `exams(id)`.
-   - `question_text`: Problem statement.
-   - `option_a`, `option_b`, `option_c`, `option_d`: Multiple-choice options.
-   - `correct_option`: Correct answer constraint (`A`, `B`, `C`, or `D`).
-   - `marks`: Weightage.
-   - `explanation`: Detailed solution rationale.
+## ⚡ Deploying to Vercel (Step-by-Step)
 
-5. **`submissions` Table (User Attempts & Exam History)**
-   - `id`: Primary key.
-   - `exam_id`: Foreign key reference to `exams(id)`.
-   - `user_id`: Foreign key reference to `users(id)`.
-   - `attempt_number`: Sequential attempt counter (Attempt #1, Attempt #2, etc.).
-   - `time_taken_seconds`: Exact duration the student spent on the test.
-   - `total_questions`, `answered_count`, `correct_count`, `wrong_count`: Metric counts.
-   - `score`, `total_marks`, `percentage`: Final calculated grading.
-   - `status`: Outcome (`PASSED` or `FAILED`).
-   - `answers_json`: Snapshot of student choices.
-   - `submitted_at`: Completion timestamp.
+The project includes `vercel.json` and `api/index.js` preconfigured for Vercel Serverless deployment.
 
-6. **`submission_answers` Table (Granular Per-Question Response Records)**
-   - `id`: Primary key.
-   - `submission_id`: Foreign key to `submissions(id)`.
-   - `question_id`: Foreign key to `questions(id)`.
-   - `selected_option`: Option chosen by candidate (`A`, `B`, `C`, `D`, or `NULL`).
-   - `is_correct`: Boolean flag (`1` for correct, `0` for incorrect).
-   - `marks_awarded`: Marks earned for this question.
+### Option A: Deploy via Vercel Dashboard & GitHub (Recommended)
+1. Push your repository to GitHub / GitLab / Bitbucket.
+2. Go to [https://vercel.com](https://vercel.com) and log in.
+3. Click **Add New... > Project** and select your repository.
+4. In the **Environment Variables** section, add:
+   - **Key**: `DATABASE_URL`
+   - **Value**: Your Neon PostgreSQL connection string (from step 1 above).
+5. Click **Deploy**!
+   - Vercel automatically deploys your static frontend and serverless API functions.
+   - The database schema and seed accounts (admin, examiner, student, and sample exams) initialize automatically on the first request!
+
+### Option B: Deploy via Vercel CLI
+```bash
+# Install Vercel CLI if needed
+npm install -g vercel
+
+# Log in and deploy
+vercel
+
+# Add your Neon connection string to Vercel environment variables
+vercel env add DATABASE_URL
+
+# Deploy to production
+vercel --prod
+```
 
 ---
 
 ## 🛠️ Tech Stack & Architecture
 
 - **Backend**: Node.js (`node:http`, `node:crypto`)
-- **Database**: SQLite via Node.js built-in `node:sqlite` (`DatabaseSync`), automatically initialized and seeded with sample exams upon first startup.
-- **Frontend**: Vanilla JavaScript (ES6+), HTML5, and modern CSS3 (Custom Properties, Flexbox, CSS Grid, mobile-responsive layout).
-- **Authentication**: Bearer Token & Session Management with cryptographically secure salts and `scrypt` password hashing.
-- **Zero External Dependencies**: Runs directly on Node.js v22+ without needing `npm install` or native compilers!
+- **Database Engine**:
+  - **Production / Cloud**: **Neon PostgreSQL** via `@neondatabase/serverless` (connection-pooled over HTTP/WebSocket for serverless functions).
+  - **Local Development**: Automatic fallback to SQLite (`node:sqlite`) when offline or before setting `DATABASE_URL`.
+- **Frontend**: Vanilla JavaScript (ES6+), HTML5, and responsive CSS3 (no frameworks, no bundlers, zero bloat).
+- **Hosting Platform**: Vercel Serverless Functions (`api/index.js`) + Edge CDN for static assets.
+- **Authentication**: Sliding-session Bearer Tokens with native `scrypt` password hashing and constant-time buffer comparison.
 
 ---
 
-## 🏁 How to Run
+## 🏁 How to Run Locally
 
-### 1. Start the Server
-Open terminal in this project directory and run:
-
+### 1. Install Dependencies
 ```bash
-node server.js
+npm install
 ```
 
-Or:
-
+### 2. Start the Server
 ```bash
 npm start
 ```
-
-### 2. Open in Browser
-Open your browser and navigate to:
-```
-http://localhost:3000
+Or for auto-reload during development:
+```bash
+npm run dev
 ```
 
-### 3. Run Automated Tests
-An end-to-end test suite is included that validates all 10 API endpoints, authentication, exam creation, anti-cheating sanitization, and automated scoring:
+### 3. Open in Browser
+Visit [http://localhost:3000](http://localhost:3000)
 
+### 4. Run Automated Test Suite
+An automated end-to-end test suite validates all 22 operations (authentication, role boundaries, exam creation, anti-cheating question sanitization, scoring, and relational attempt records):
 ```bash
 npm test
 ```
@@ -174,15 +181,21 @@ npm test
 
 ```
 Mini examination portal/
-├── db.js             # SQLite database schema, connections, seeds & crypto helpers
-├── server.js         # HTTP server, routing, REST API endpoints & static file server
-├── test_runner.js    # Automated end-to-end test suite
-├── package.json      # Project metadata & npm scripts
-├── README.md         # Documentation
-└── public/           # Frontend client assets
-    ├── index.html    # SPA markup with Admin, Student & Exam Arena views
-    ├── style.css     # Modern, high-contrast, responsive stylesheet
-    └── app.js        # Frontend state management, countdown timer & API handlers
+├── api/
+│   └── index.js             # Vercel serverless function entrypoint
+├── scripts/
+│   ├── setup_neon.js        # Standalone Neon DB connection test & table seeder
+│   └── migrate_sqlite_to_neon.js # One-click data migration from SQLite to Neon
+├── public/                  # Frontend client assets (Unchanged UI/UX)
+│   ├── index.html           # SPA markup for Admin, Examiner, Student dashboards
+│   ├── style.css            # Responsive, modern stylesheet
+│   └── app.js               # Frontend state, countdown timer, API interaction
+├── .env.example             # Environment template for Neon DATABASE_URL
+├── vercel.json              # Vercel routing and rewrite configuration
+├── db.js                    # Neon PostgreSQL adapter + SQLite fallback
+├── server.js                # Core HTTP server & REST API endpoints
+├── test_runner.js           # 22-test automated test suite
+└── package.json             # Scripts & dependencies
 ```
 
 ---
@@ -191,25 +204,34 @@ Mini examination portal/
 
 ### Authentication
 - `POST /api/auth/login` - Authenticate with username and password.
-- `POST /api/auth/register` - Create a new student or admin account.
-- `POST /api/auth/demo-login` - Instant single-click authentication for demo testing (`admin` or `student`).
-- `GET /api/auth/me` - Retrieve current session information.
-- `POST /api/auth/logout` - Invalidate active session.
+- `POST /api/auth/register` - Register a new candidate account.
+- `POST /api/auth/demo-login` - Instant one-click demo login (`admin`, `examiner`, or `student`).
+- `GET /api/auth/me` - Retrieve authenticated user session info.
+- `POST /api/auth/logout` - Invalidate session token.
 
 ### Admin Endpoints
 - `GET /api/admin/stats` - Total exams, questions, students, submissions, pass rate.
 - `GET /api/admin/exams` - List all created exams with question and submission counts.
 - `POST /api/admin/exams` - Create a new exam with batch MCQ questions.
-- `GET /api/admin/exams/:id` - Get exam details and questions with correct answers.
+- `GET /api/admin/exams/:id` - Get exam details and questions with answers.
 - `PUT /api/admin/exams/:id` - Update exam metadata.
-- `DELETE /api/admin/exams/:id` - Delete an exam.
-- `POST /api/admin/exams/:id/questions` - Add a question to an existing exam.
+- `DELETE /api/admin/exams/:id` - Delete an exam (Admin only).
+- `POST /api/admin/exams/:id/questions` - Add a question to an exam.
+- `GET /api/admin/questions/:id` - Get single question details for editing.
+- `PUT /api/admin/questions/:id` - Edit question options, answer, and explanation.
 - `DELETE /api/admin/questions/:id` - Delete a question.
+- `GET /api/admin/questions` - List questions (optionally filtered by `exam_id`).
+- `GET /api/admin/answers` - List granular question answers from submissions.
 - `GET /api/admin/submissions` - Audit all student attempts and scores.
+- `GET /api/admin/users` - List user accounts with attempt statistics (Admin only).
+- `POST /api/admin/users` - Create examiner or student account (Admin only).
+- `GET /api/admin/users/:id/attempts` - View specific candidate's exam attempts.
+- `DELETE /api/admin/users/:id` - Delete a user account (Admin only).
 
 ### Student Endpoints
-- `GET /api/user/exams` - List available published exams with student's attempt history.
+- `GET /api/user/exams` - List available published exams with student's attempt status.
 - `GET /api/user/exams/:id/start` - Start exam session (questions sanitized without answers).
-- `POST /api/user/exams/:id/submit` - Submit candidate answers, calculate score, and return detailed review.
+- `POST /api/user/exams/:id/submit` - Submit answers, calculate score, and return detailed review.
+- `GET /api/user/profile-stats` - Candidate comprehensive metrics.
 - `GET /api/user/results` - Get candidate's past exam submission history.
 - `GET /api/user/results/:id` - Get detailed solution review for a past attempt.
