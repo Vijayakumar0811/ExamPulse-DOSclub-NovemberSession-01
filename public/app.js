@@ -5,7 +5,7 @@
 // Application State
 const state = {
   currentUser: null,
-  token: localStorage.getItem('exampulse_token') || null,
+  token: null,
   activeExam: null,
   activeQuestions: [],
   currentQuestionIndex: 0,
@@ -299,6 +299,45 @@ function renderNavProfile() {
 // ==========================================================================
 // Authentication Logic
 // ==========================================================================
+const SESSION_INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+let inactivityTimeoutId = null;
+let lastSessionRefreshAt = 0;
+
+function resetInactivityTimeout() {
+  if (!state.token || !state.currentUser) return;
+
+  if (inactivityTimeoutId) {
+    clearTimeout(inactivityTimeoutId);
+  }
+
+  inactivityTimeoutId = setTimeout(() => {
+    logout();
+  }, SESSION_INACTIVITY_TIMEOUT);
+}
+
+async function trackSessionActivity() {
+  resetInactivityTimeout();
+
+  // Refresh the server-side session periodically while the user is active.
+  const now = Date.now();
+  if (state.token && now - lastSessionRefreshAt >= 60 * 1000) {
+    lastSessionRefreshAt = now;
+    try {
+      await apiRequest('/api/auth/me');
+    } catch (err) {
+      logout();
+    }
+  }
+}
+
+function setupSessionInactivityTracking() {
+  const activityEvents = ['click', 'keydown', 'mousemove', 'mousedown', 'scroll', 'touchstart'];
+
+  activityEvents.forEach(eventName => {
+    document.addEventListener(eventName, trackSessionActivity, { passive: true });
+  });
+}
+
 async function initApp() {
   if (state.token) {
     try {
@@ -309,7 +348,6 @@ async function initApp() {
       return;
     } catch (err) {
       console.warn('Session expired or invalid, logging out:', err);
-      localStorage.removeItem('exampulse_token');
       state.token = null;
     }
   }
@@ -363,7 +401,8 @@ async function login(username, password) {
 
     state.token = data.token;
     state.currentUser = data.user;
-    localStorage.setItem('exampulse_token', data.token);
+    lastSessionRefreshAt = Date.now();
+    resetInactivityTimeout();
 
     renderNavProfile();
     showToast(`Logged in successfully as ${data.user.full_name}`, 'success');
@@ -382,7 +421,8 @@ async function demoLogin(role) {
 
     state.token = data.token;
     state.currentUser = data.user;
-    localStorage.setItem('exampulse_token', data.token);
+    lastSessionRefreshAt = Date.now();
+    resetInactivityTimeout();
 
     renderNavProfile();
     showToast(`Switched to Demo ${role.toUpperCase()}: ${data.user.full_name}`, 'success');
@@ -401,7 +441,8 @@ async function register(fullname, username, password, role, email = null) {
 
     state.token = data.token;
     state.currentUser = data.user;
-    localStorage.setItem('exampulse_token', data.token);
+    lastSessionRefreshAt = Date.now();
+    resetInactivityTimeout();
 
     renderNavProfile();
     showToast(`Account created! Welcome, ${data.user.full_name}`, 'success');
@@ -421,9 +462,13 @@ async function logout() {
   if (state.timerInterval) {
     clearInterval(state.timerInterval);
   }
+  if (inactivityTimeoutId) {
+    clearTimeout(inactivityTimeoutId);
+    inactivityTimeoutId = null;
+  }
 
-  localStorage.removeItem('exampulse_token');
   state.token = null;
+  lastSessionRefreshAt = 0;
   state.currentUser = null;
   state.activeExam = null;
   renderNavProfile();
@@ -1568,6 +1613,8 @@ function escapeHtml(str) {
 // Event Listeners Setup
 // ==========================================================================
 function setupEventListeners() {
+  setupSessionInactivityTracking();
+
   // Brand Logo Click
   elements.brandLogo.onclick = () => routeByRole();
 

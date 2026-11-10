@@ -89,13 +89,19 @@ function getAuthenticatedUser(req) {
     WHERE s.token = ? AND s.expires_at > ?
   `).get(token, now);
 
-  return session || null;
+  if (!session) return null;
+
+  // Sliding inactivity timeout: every authenticated request extends the session.
+  const expiresAt = now + 15 * 60 * 1000;
+  db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(expiresAt, token);
+
+  return session;
 }
 
 // Create new session token for user
 function createSession(userId) {
   const token = crypto.randomUUID();
-  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes of inactivity
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
   return token;
 }
