@@ -10,6 +10,7 @@ function dispatch(options, payload = null) {
     req.headers = options.headers || {};
     if (payload) {
       req.headers['content-type'] = 'application/json';
+      req.body = payload;
     }
 
     const res = new EventEmitter();
@@ -309,6 +310,10 @@ async function runMockTests() {
   console.log('\n======================================================');
   console.log('>>> ALL 22 COMPREHENSIVE BACKEND TESTS PASSED! <<<');
   console.log('======================================================\n');
+  process.exit(0);
 }
 
-runMockTests().catch(console.error);
+runMockTests().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

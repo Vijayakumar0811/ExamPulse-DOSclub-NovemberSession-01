@@ -41,8 +41,19 @@ function sendJson(res, statusCode, data) {
   res.end(payload);
 }
 
-// Helper to parse JSON body from request
+// Helper to parse JSON body from request (supports Vercel pre-parsed body and raw streams)
 function parseBody(req) {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'string') {
+      try {
+        return Promise.resolve(JSON.parse(req.body));
+      } catch {
+        return Promise.resolve({});
+      }
+    }
+    return Promise.resolve(req.body);
+  }
+
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
@@ -64,6 +75,40 @@ function parseBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+// Resolve true endpoint path across Vercel serverless rewrites, headers, query params, and local Node
+function resolvePathname(req, parsedUrl) {
+  // 1. Explicit path from Vercel rewrite parameter (?__path=/api/...)
+  const queryPath = parsedUrl.searchParams.get('__path');
+  if (queryPath) {
+    let p = queryPath;
+    if (!p.startsWith('/')) p = '/' + p;
+    return p;
+  }
+
+  // 2. Vercel catch-all route parameter (req.query.path)
+  if (req.query && req.query.path) {
+    const slug = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+    return '/api/' + slug.replace(/^\/+/, '');
+  }
+
+  // 3. Vercel & reverse proxy original matched path headers
+  const matchedHeader = req.headers['x-matched-path'] ||
+                        req.headers['x-vercel-matched-path'] ||
+                        req.headers['x-forwarded-url'] ||
+                        req.headers['x-original-url'];
+  if (matchedHeader) {
+    try {
+      const p = new URL(matchedHeader, 'http://localhost').pathname;
+      if (!p.endsWith('index.js')) {
+        return p;
+      }
+    } catch {}
+  }
+
+  // 4. Default to req.url pathname
+  return parsedUrl.pathname;
 }
 
 // Authentication & Session Helper (Async for Neon PostgreSQL / SQLite)
@@ -163,13 +208,24 @@ async function handler(req, res) {
   }
 
   const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = parsedUrl.pathname;
+  const pathname = resolvePathname(req, parsedUrl);
   const method = req.method;
 
   try {
     // ==========================================
     // API ROUTES
     // ==========================================
+
+    // Health / Diagnostics endpoint
+    if (pathname === '/api/health' && method === 'GET') {
+      return sendJson(res, 200, {
+        success: true,
+        status: 'healthy',
+        database: db.isPostgres ? 'Neon PostgreSQL' : 'SQLite',
+        resolvedPath: pathname,
+        method
+      });
+    }
 
     // --- AUTHENTICATION APIS ---
     if (pathname === '/api/auth/login' && method === 'POST') {

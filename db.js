@@ -49,7 +49,7 @@ function convertSqlForPg(sql) {
 
   const trimmed = out.trim();
   if (/^INSERT\s+INTO/i.test(trimmed) && !/RETURNING/i.test(trimmed)) {
-    out = trimmed + ' RETURNING id';
+    out = trimmed + ' RETURNING *';
   }
 
   return out;
@@ -98,10 +98,26 @@ if (isPostgres) {
   console.log('[Database] Initialized with Neon PostgreSQL hosting.');
 } else {
   // Local SQLite fallback when DATABASE_URL is not set
+  const fs = require('node:fs');
   const { DatabaseSync } = require('node:sqlite');
-  const DB_PATH = path.join(__dirname, 'exam_portal.db');
+  const isVercel = Boolean(process.env.VERCEL);
+  let DB_PATH = path.join(__dirname, 'exam_portal.db');
+
+  if (isVercel) {
+    // In Vercel serverless environments, the root filesystem is read-only; /tmp is writable
+    const tmpPath = path.join('/tmp', 'exam_portal.db');
+    if (!fs.existsSync(tmpPath) && fs.existsSync(DB_PATH)) {
+      try {
+        fs.copyFileSync(DB_PATH, tmpPath);
+      } catch (copyErr) {
+        console.warn('[Database] Initial db copy to /tmp note:', copyErr.message);
+      }
+    }
+    DB_PATH = tmpPath;
+  }
+
   sqliteDb = new DatabaseSync(DB_PATH);
-  console.log('[Database] DATABASE_URL not set; using local SQLite database (exam_portal.db).');
+  console.log(`[Database] DATABASE_URL not set; using SQLite database (${DB_PATH}).`);
 }
 
 // Unified Database Adapter
